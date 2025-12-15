@@ -435,6 +435,15 @@ func (r *WatcherApplierReconciler) generateServiceConfigs(
 		templateParameters["NotificationURL"] = string(secret.Data[NotificationURLSelector])
 	}
 
+	// Application Credential data
+	if acID, ok := secret.Data["ACID"]; ok && len(acID) > 0 {
+		if acSecretData, ok := secret.Data["ACSecret"]; ok && len(acSecretData) > 0 {
+			templateParameters["ACID"] = string(acID)
+			templateParameters["ACSecret"] = string(acSecretData)
+			Log.Info("Using ApplicationCredentials auth")
+		}
+	}
+
 	// MTLS
 	if memcachedInstance.GetMemcachedMTLSSecret() != "" {
 		templateParameters["MemcachedAuthCert"] = fmt.Sprint(memcachedv1.CertMountPath())
@@ -506,6 +515,36 @@ func (r *WatcherApplierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
+	// Application Credential secret watching function
+	acSecretFn := func(_ context.Context, o client.Object) []reconcile.Request {
+		result := []reconcile.Request{}
+
+		// Check if this is a watcher AC secret by name pattern (ac-watcher-secret)
+		expectedSecretName := keystonev1.GetACSecretName(watcher.ServiceName)
+		if o.GetName() == expectedSecretName {
+			// get all WatcherApplier CRs in this namespace
+			watcherAppliers := &watcherv1beta1.WatcherApplierList{}
+			listOpts := []client.ListOption{
+				client.InNamespace(o.GetNamespace()),
+			}
+			if err := r.Client.List(context.Background(), watcherAppliers, listOpts...); err != nil {
+				return nil
+			}
+
+			// Enqueue reconcile for all WatcherApplier instances
+			for _, cr := range watcherAppliers.Items {
+				result = append(result, reconcile.Request{
+					NamespacedName: types.NamespacedName{
+						Namespace: o.GetNamespace(),
+						Name:      cr.Name,
+					},
+				})
+			}
+		}
+
+		return result
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&watcherv1beta1.WatcherApplier{}).
 		Owns(&corev1.Secret{}).
@@ -513,6 +552,11 @@ func (r *WatcherApplierReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Watches(
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.findObjectsForSrc),
+			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}),
+		).
+		Watches(
+			&corev1.Secret{},
+			handler.EnqueueRequestsFromMapFunc(acSecretFn),
 			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}),
 		).
 		Watches(

@@ -130,6 +130,11 @@ type WatcherSpecCore struct {
 	APITimeout *int `json:"apiTimeout"`
 
 	// +kubebuilder:validation:Optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// Auth - Parameters related to authentication (shared by all Watcher components)
+	Auth AuthSpec `json:"auth,omitempty"`
+
+	// +kubebuilder:validation:Optional
 	// NotificationsBusInstance is the name of the RabbitMqCluster CR to select
 	// the Message Bus Service instance used by the Watcher service to publish and consume notifications
 	// from other services.

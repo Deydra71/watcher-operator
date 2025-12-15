@@ -804,6 +804,25 @@ func (r *WatcherReconciler) generateServiceConfigDBJobs(
 		"APIPublicPort": fmt.Sprintf("%d", watcher.WatcherPublicPort),
 	}
 
+	// Retrieve Application Credential data if configured
+	if instance.Spec.Auth.ApplicationCredentialSecret != "" {
+		secret := &corev1.Secret{}
+		key := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Spec.Auth.ApplicationCredentialSecret}
+		if err := r.Client.Get(ctx, key, secret); err != nil {
+			if !k8s_errors.IsNotFound(err) {
+				Log.Error(err, "Failed to get ApplicationCredential secret", "secret", key)
+			}
+		} else {
+			acID, okID := secret.Data[keystonev1.ACIDSecretKey]
+			acSecret, okSecret := secret.Data[keystonev1.ACSecretSecretKey]
+			if okID && len(acID) > 0 && okSecret && len(acSecret) > 0 {
+				templateParameters["ACID"] = string(acID)
+				templateParameters["ACSecret"] = string(acSecret)
+				Log.Info("Using ApplicationCredentials auth", "secret", key)
+			}
+		}
+	}
+
 	return GenerateConfigsGeneric(ctx, helper, instance, envVars, templateParameters, customData, labels, true)
 }
 
@@ -884,6 +903,26 @@ func (r *WatcherReconciler) createSubLevelSecret(
 		watcher.GlobalCustomConfigFileName:       instance.Spec.CustomServiceConfig,
 		NotificationURLSelector:                  string(notificationURLSecret.Data[TransportURLSelector]),
 	}
+
+	// Add Application Credential data if configured
+	if instance.Spec.Auth.ApplicationCredentialSecret != "" {
+		acSecret := &corev1.Secret{}
+		key := types.NamespacedName{Namespace: instance.Namespace, Name: instance.Spec.Auth.ApplicationCredentialSecret}
+		if err := r.Client.Get(ctx, key, acSecret); err != nil {
+			if !k8s_errors.IsNotFound(err) {
+				Log.Error(err, "Failed to get ApplicationCredential secret", "secret", key)
+			}
+		} else {
+			acID, okID := acSecret.Data[keystonev1.ACIDSecretKey]
+			acSecretData, okSecret := acSecret.Data[keystonev1.ACSecretSecretKey]
+			if okID && len(acID) > 0 && okSecret && len(acSecretData) > 0 {
+				data["ACID"] = string(acID)
+				data["ACSecret"] = string(acSecretData)
+				Log.Info("Using ApplicationCredentials auth (centralized from parent Watcher CR)", "secret", key)
+			}
+		}
+	}
+
 	secretName := instance.Name
 
 	labels := labels.GetLabels(instance, labels.GetGroupLabel(watcher.ServiceName), map[string]string{})
@@ -1262,6 +1301,18 @@ func (r *WatcherReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			return nil
 		}
 		return []string{*cr.Spec.PrometheusSecret}
+	}); err != nil {
+		return err
+	}
+
+	// index authAppCredSecretField
+	if err := mgr.GetFieldIndexer().IndexField(context.Background(), &watcherv1beta1.Watcher{}, authAppCredSecretField, func(rawObj client.Object) []string {
+		// Extract the secret name from the spec, if one is provided
+		cr := rawObj.(*watcherv1beta1.Watcher)
+		if cr.Spec.Auth.ApplicationCredentialSecret == "" {
+			return nil
+		}
+		return []string{cr.Spec.Auth.ApplicationCredentialSecret}
 	}); err != nil {
 		return err
 	}

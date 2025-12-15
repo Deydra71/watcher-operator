@@ -54,9 +54,24 @@ spec:
       kind: Watcher
       name: watchers.watcher.openstack.org
       specDescriptors:
+      - description: Auth - Parameters related to authentication
+        displayName: Auth
+        path: apiServiceTemplate.auth
+      - description: ApplicationCredentialSecret - Secret containing Application Credential
+          ID and Secret
+        displayName: Application Credential Secret
+        path: apiServiceTemplate.auth.applicationCredentialSecret
       - description: TLS - Parameters related to the TLS
         displayName: TLS
         path: apiServiceTemplate.tls
+      - description: Auth - Parameters related to authentication (shared by all Watcher
+          components)
+        displayName: Auth
+        path: auth
+      - description: ApplicationCredentialSecret - Secret containing Application Credential
+          ID and Secret
+        displayName: Application Credential Secret
+        path: auth.applicationCredentialSecret
       version: v1beta1
   description: The Watcher Operator project
   displayName: Watcher Operator

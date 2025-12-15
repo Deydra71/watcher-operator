@@ -91,6 +91,14 @@ type APIOverrideSpec struct {
 	Service map[service.Endpoint]service.RoutedOverrideSpec `json:"service,omitempty"`
 }
 
+// AuthSpec defines authentication parameters
+type AuthSpec struct {
+	// +kubebuilder:validation:Optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// ApplicationCredentialSecret - Secret containing Application Credential ID and Secret
+	ApplicationCredentialSecret string `json:"applicationCredentialSecret,omitempty"`
+}
+
 // WatcherAPITemplate defines the input parameters specified by the user to
 // create a WatcherAPI via higher level CRDs.
 type WatcherAPITemplate struct {
@@ -112,6 +120,11 @@ type WatcherAPITemplate struct {
 	// +operator-sdk:csv:customresourcedefinitions:type=spec
 	// TLS - Parameters related to the TLS
 	TLS tls.API `json:"tls,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// +operator-sdk:csv:customresourcedefinitions:type=spec
+	// Auth - Parameters related to authentication
+	Auth AuthSpec `json:"auth,omitempty"`
 }
 
 //+kubebuilder:object:root=true
